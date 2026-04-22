@@ -1,12 +1,9 @@
 -- lua/CW/ui/explorer.lua
--- Main nui panel: tab management, window lifecycle
--- Tabs: "tree" | "favorites"
--- Tab bar rendered via winbar (like UNX.nvim).
--- Each tab gets its own buffer; switching tabs swaps the buffer in the window.
+-- Single-pane explorer: ★ Favorites + workspace folder tree in one view.
+-- Winbar shows the workspace name (no tab switching needed).
 
-local Split    = require("nui.split")
-local ViewTree = require("CW.ui.view.tree")
-local ViewFav  = require("CW.ui.view.favorites")
+local Split     = require("nui.split")
+local ViewTree  = require("CW.ui.view.tree")
 local workspace = require("CW.workspace")
 
 local M = {}
@@ -14,14 +11,11 @@ local M = {}
 -- ── State ────────────────────────────────────────────────────────────────────
 
 local state = {
-    split       = nil,   -- nui.split instance
-    win         = nil,   -- window id
-    ws          = nil,   -- current workspace
-    current_tab = "tree",
-    views       = {},    -- { tree = view_obj, favorites = view_obj }
+    split = nil,  -- nui.split instance
+    win   = nil,  -- window id
+    ws    = nil,  -- current workspace
+    view  = nil,  -- ViewTree instance
 }
-
-local TAB_ORDER = { "tree", "favorites" }
 
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -33,81 +27,41 @@ local function is_open()
     return state.win ~= nil and vim.api.nvim_win_is_valid(state.win)
 end
 
---- Create a scratch buffer for a tab.
-local function create_tab_buf(tab_name)
-    local buf = vim.api.nvim_create_buf(false, true)
-    vim.bo[buf].buftype    = "nofile"
-    vim.bo[buf].bufhidden  = "hide"
-    vim.bo[buf].filetype   = "cw-explorer"
-    vim.bo[buf].modifiable = false
-    vim.bo[buf].swapfile   = false
-    return buf
-end
-
---- Update the winbar to show the current tab.
 local function update_winbar()
     if not is_open() then return end
-    local parts = {}
-    for i, tab in ipairs(TAB_ORDER) do
-        local hl  = (tab == state.current_tab) and "%#CWTabActive#" or "%#CWTabInactive#"
-        table.insert(parts, hl .. " " .. tab .. " ")
-        if i < #TAB_ORDER then
-            table.insert(parts, "%#CWTabSeparator#│")
-        end
-    end
-    local bar = table.concat(parts) .. "%#Normal#"
-    pcall(vim.api.nvim_win_set_option, state.win, "winbar", bar)
+    local name = state.ws and state.ws.name or "code-workspace"
+    pcall(vim.api.nvim_win_set_option, state.win, "winbar",
+        "%#CWTabActive# 󰉋 " .. name .. " %#Normal#")
 end
 
---- Switch to a different tab.
----@param tab string  "tree" | "favorites"
-local function switch_tab(tab)
-    if not vim.tbl_contains(TAB_ORDER, tab) then return end
-    state.current_tab = tab
-    local view = state.views[tab]
-    if view and view.buf and vim.api.nvim_buf_is_valid(view.buf) then
-        vim.api.nvim_win_set_buf(state.win, view.buf)
-    end
-    update_winbar()
-end
-
--- ── Keymaps ───────────────────────────────────────────────────────────────────
-
-local function open_node_at_cursor(split_win)
-    local view = state.views[state.current_tab]
-    if not (view and view.tree) then return end
-
-    local node = view.tree:get_node()
+local function open_node_at_cursor(target_win)
+    if not (state.view and state.view.tree) then return end
+    local node = state.view.tree:get_node()
     if not node then return end
 
-    if state.current_tab == "tree" then
-        if node.type == "directory" or node._has_children then
-            if node:is_expanded() then
-                node:collapse()
-            else
-                view.expand_node(node)
-                node:expand()
-            end
-            view.save_state()
-            view.tree:render()
-        elseif node.path then
-            vim.api.nvim_set_current_win(split_win or vim.fn.win_getid(vim.fn.winnr("#")))
-            vim.cmd("edit " .. vim.fn.fnameescape(node.path))
+    local is_dir = node.type == "directory" or node.type == "fav_root"
+                   or node.type == "fav_folder" or node._has_children
+    if is_dir then
+        if node:is_expanded() then
+            node:collapse()
+        else
+            state.view.expand_node(node)
+            node:expand()
         end
-    elseif state.current_tab == "favorites" then
-        if node.extra and node.extra.cw_type == "fav_folder" then
-            if node:is_expanded() then node:collapse() else node:expand() end
-            view.tree:render()
-        elseif node.path then
-            vim.api.nvim_set_current_win(split_win or vim.fn.win_getid(vim.fn.winnr("#")))
-            vim.cmd("edit " .. vim.fn.fnameescape(node.path))
+        state.view.save_state()
+        state.view.tree:render()
+    elseif node.path then
+        local win = target_win
+        if not (win and vim.api.nvim_win_is_valid(win)) then
+            win = vim.fn.win_getid(vim.fn.winnr("#"))
         end
+        vim.api.nvim_set_current_win(win)
+        vim.cmd("edit " .. vim.fn.fnameescape(node.path))
     end
 end
 
 local function setup_keymaps(buf)
-    local conf = get_conf()
-    local km = conf.keymaps
+    local km = get_conf().keymaps
     local prev_win = nil
 
     local function map(keys, fn)
@@ -127,73 +81,33 @@ local function setup_keymaps(buf)
     end)
 
     map(km.vsplit, function()
-        local view = state.views[state.current_tab]
-        local node = view and view.tree and view.tree:get_node()
-        if node and node.path and node.type ~= "directory" then
+        local node = state.view and state.view.tree and state.view.tree:get_node()
+        if node and node.path and node.type == "file" then
             vim.cmd("vsplit " .. vim.fn.fnameescape(node.path))
         end
     end)
 
     map(km.split, function()
-        local view = state.views[state.current_tab]
-        local node = view and view.tree and view.tree:get_node()
-        if node and node.path and node.type ~= "directory" then
+        local node = state.view and state.view.tree and state.view.tree:get_node()
+        if node and node.path and node.type == "file" then
             vim.cmd("split " .. vim.fn.fnameescape(node.path))
         end
     end)
 
-    map(km.tab_next, function()
-        local cur = 1
-        for i, t in ipairs(TAB_ORDER) do if t == state.current_tab then cur = i end end
-        switch_tab(TAB_ORDER[(cur % #TAB_ORDER) + 1])
-    end)
-
-    map(km.tab_prev, function()
-        local cur = 1
-        for i, t in ipairs(TAB_ORDER) do if t == state.current_tab then cur = i end end
-        switch_tab(TAB_ORDER[((cur - 2) % #TAB_ORDER) + 1])
-    end)
-
     map(km.refresh, function()
-        local view = state.views[state.current_tab]
-        if view and view.refresh then view.refresh() end
+        if state.view and state.view.refresh then state.view.refresh() end
     end)
 
     map(km.toggle_favorite, function()
-        local fav_view = state.views["favorites"]
-        if not fav_view then return end
-        local cur_buf_path = ""
-        local tree_view = state.views["tree"]
-        if tree_view and tree_view.tree then
-            local node = tree_view.tree:get_node()
-            if node and node.path and node.type ~= "directory" then
-                cur_buf_path = node.path
-            end
-        end
-        if cur_buf_path == "" then
-            cur_buf_path = vim.fn.expand("#:p")
-        end
-        if cur_buf_path and cur_buf_path ~= "" then
-            local added = fav_view.toggle(cur_buf_path)
-            vim.notify(added and "Added to Favorites" or "Removed from Favorites", vim.log.levels.INFO)
-        end
-    end)
-
-    -- Mouse: click on winbar row (line 0/1) to switch tabs
-    map("<LeftMouse>", function()
-        local mouse = vim.fn.getmousepos()
-        if mouse.winid == state.win and mouse.line <= 1 then
-            -- Determine which tab was clicked by column position
-            local col = mouse.column
-            local pos = 0
-            for _, tab in ipairs(TAB_ORDER) do
-                local label = " " .. tab .. " "
-                if col >= pos and col < pos + #label then
-                    switch_tab(tab)
-                    return
-                end
-                pos = pos + #label + 1  -- +1 for separator
-            end
+        if not state.view then return end
+        -- Try cursor node first; fall back to alternate buffer
+        local node = state.view.tree and state.view.tree:get_node()
+        local file_path = (node and node.path and node.type == "file")
+                          and node.path or vim.fn.expand("#:p")
+        if file_path and file_path ~= "" then
+            local added = state.view.toggle_favorite(file_path)
+            vim.notify(added and "Added to Favorites" or "Removed from Favorites",
+                vim.log.levels.INFO)
         end
     end)
 
@@ -203,6 +117,13 @@ local function setup_keymaps(buf)
 
     map(km.live_grep, function()
         require("CW.cmd.work_grep").execute(state.ws)
+    end)
+
+    map("<2-LeftMouse>", function()
+        local mouse = vim.fn.getmousepos()
+        if mouse.winid ~= state.win or mouse.line == 0 then return end
+        pcall(vim.api.nvim_win_set_cursor, state.win, { mouse.line, 0 })
+        open_node_at_cursor()
     end)
 end
 
@@ -223,8 +144,6 @@ function M.open(opts)
         state.ws = ws
 
         local conf = get_conf()
-
-        -- Create split (we'll replace its buffer with our own tab bufs)
         state.split = Split({
             relative  = "editor",
             position  = conf.window.position,
@@ -247,45 +166,20 @@ function M.open(opts)
         })
         state.split:mount()
         state.win = state.split.winid
-        local split_buf = state.split.bufnr  -- placeholder buf, replaced below
+        local buf = state.split.bufnr
 
-        -- Create a separate buffer for each tab and build the view
-        local tree_buf = create_tab_buf("tree")
-        local fav_buf  = create_tab_buf("favorites")
-        state.views["tree"]      = ViewTree.new(tree_buf, ws)
-        state.views["favorites"] = ViewFav.new(fav_buf, ws)
-
-        -- Set up keymaps on both tab buffers
-        setup_keymaps(tree_buf)
-        setup_keymaps(fav_buf)
-
-        -- Switch to initial tab's buffer (replaces nui.split placeholder)
-        state.current_tab = opts.tab or "tree"
-        vim.api.nvim_win_set_buf(state.win, state.views[state.current_tab].buf)
-
-        -- Delete the placeholder buffer nui.split created
-        if vim.api.nvim_buf_is_valid(split_buf) then
-            pcall(vim.api.nvim_buf_delete, split_buf, { force = true })
-        end
-
-        -- Winbar shows the tab names
+        state.view = ViewTree.new(buf, ws)
+        setup_keymaps(buf)
         update_winbar()
 
-        -- Clean up when the window is closed
         vim.api.nvim_create_autocmd("WinClosed", {
             pattern  = tostring(state.win),
             once     = true,
             callback = function()
-                if state.views["tree"] then state.views["tree"].save_state() end
-                -- Delete tab buffers
-                for _, view in pairs(state.views) do
-                    if view.buf and vim.api.nvim_buf_is_valid(view.buf) then
-                        pcall(vim.api.nvim_buf_delete, view.buf, { force = true })
-                    end
-                end
+                if state.view then state.view.save_state() end
                 state.split = nil
                 state.win   = nil
-                state.views = {}
+                state.view  = nil
             end,
         })
     end
@@ -299,17 +193,11 @@ end
 
 function M.close()
     if not is_open() then return end
-    if state.views["tree"] then state.views["tree"].save_state() end
-    -- Delete tab buffers before unmounting
-    for _, view in pairs(state.views) do
-        if view.buf and vim.api.nvim_buf_is_valid(view.buf) then
-            pcall(vim.api.nvim_buf_delete, view.buf, { force = true })
-        end
-    end
+    if state.view then state.view.save_state() end
     pcall(function() state.split:unmount() end)
     state.split = nil
     state.win   = nil
-    state.views = {}
+    state.view  = nil
 end
 
 function M.toggle(opts)
@@ -323,81 +211,65 @@ end
 
 function M.refresh()
     if not is_open() then return end
-    local view = state.views[state.current_tab]
-    if view and view.refresh then view.refresh() end
+    if state.view and state.view.refresh then state.view.refresh() end
 end
 
---- Focus the tree node corresponding to the current file.
-function M.focus_current_file()
-    if not is_open() then return end
-    local file_path = vim.fn.expand("%:p")
-    if file_path == "" then return end
-
-    local tree_view = state.views["tree"]
-    if not (tree_view and tree_view.tree) then return end
-
-    -- Ensure tree tab is active
-    if state.current_tab ~= "tree" then switch_tab("tree") end
-
-    local norm = require("CW.path").normalize(file_path)
-    local found = false
-    local function find_in_nodes(node_ids)
-        for _, id in ipairs(node_ids or {}) do
-            if found then return end
-            local n = tree_view.tree:get_node(id)
-            if n and n.path and require("CW.path").equal(n.path, norm) then
-                found = true
-                -- TODO: scroll to node
-                return
-            end
-            if n then find_in_nodes(n:get_child_ids()) end
-        end
-    end
-    find_in_nodes(tree_view.tree.nodes.root_ids)
-end
-
---- Toggle favorite for a given path (callable from outside the panel).
+--- Toggle favorite for a given path (callable without the panel open).
 ---@param file_path string
 function M.toggle_favorite(file_path)
     local function do_toggle(ws)
         if not ws then return end
         state.ws = ws
-        if not state.views["favorites"] then
-            local buf = create_tab_buf("favorites")
-            state.views["favorites"] = ViewFav.new(buf, ws)
-            setup_keymaps(buf)
+        if state.view then
+            local added = state.view.toggle_favorite(file_path)
+            vim.notify(added and "Added to Favorites" or "Removed from Favorites",
+                vim.log.levels.INFO)
+            return
         end
-        local added = state.views["favorites"].toggle(file_path)
-        vim.notify(added and "Added to Favorites" or "Removed from Favorites", vim.log.levels.INFO)
+        -- Panel not open: update store directly
+        local s     = require("CW.store")
+        local p     = require("CW.path")
+        local favs  = s.load_ws(ws.safe_name, "favorites") or {}
+        local norm  = p.normalize(file_path)
+        local added = true
+        for i, item in ipairs(favs) do
+            if not item.is_folder and p.normalize(item.path) == norm then
+                table.remove(favs, i); added = false; break
+            end
+        end
+        if added then
+            table.insert(favs, { path = file_path, name = p.basename(file_path),
+                                  folder = "Default", added_at = os.time() })
+        end
+        s.save_ws(ws.safe_name, "favorites", favs)
+        vim.notify(added and "Added to Favorites" or "Removed from Favorites",
+            vim.log.levels.INFO)
     end
-    if state.ws then
-        do_toggle(state.ws)
-    else
-        workspace.find(nil, do_toggle)
-    end
+    if state.ws then do_toggle(state.ws) else workspace.find(nil, do_toggle) end
 end
 
---- Return all favorite paths (callable from outside the panel).
+--- Return all favorite paths via callback.
 ---@param on_result fun(paths: string[])
 function M.get_favorites(on_result)
     local function do_get(ws)
         if not ws then on_result({}) return end
         state.ws = ws
-        if not state.views["favorites"] then
-            local buf = create_tab_buf("favorites")
-            state.views["favorites"] = ViewFav.new(buf, ws)
-            setup_keymaps(buf)
+        if state.view then
+            on_result(state.view.get_paths())
+            return
         end
-        on_result(state.views["favorites"].get_paths())
+        local s    = require("CW.store")
+        local favs = s.load_ws(ws.safe_name, "favorites") or {}
+        local out  = {}
+        for _, item in ipairs(favs) do
+            if not item.is_folder then table.insert(out, item.path) end
+        end
+        on_result(out)
     end
-    if state.ws then
-        do_get(state.ws)
-    else
-        workspace.find(nil, do_get)
-    end
+    if state.ws then do_get(state.ws) else workspace.find(nil, do_get) end
 end
 
---- Return the currently loaded workspace (if the explorer has been opened).
+--- Return the currently loaded workspace.
 ---@return table|nil
 function M.current_ws()
     return state.ws
