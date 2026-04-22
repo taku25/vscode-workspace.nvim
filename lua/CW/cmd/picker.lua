@@ -47,7 +47,7 @@ local function run_fd(folders, on_results)
         local cmd = { fd_exe, "--type", "f", "--hidden", "--follow",
                       "--exclude", ".git",
                       "--search-path", native_dir,
-                      "" }  -- empty pattern = match all
+                      "." }
         local lines = vim.fn.systemlist(cmd)
         for _, line in ipairs(lines) do
             if line ~= "" then table.insert(all, line) end
