@@ -1,6 +1,6 @@
 -- lua/CW/cmd/picker.lua
--- Run fd/rg ourselves and feed results directly to the picker backend.
--- Avoids all search_dirs / path-with-spaces issues on Windows.
+-- Collect files with a pure-Lua recursive scanner (vim.loop.fs_scandir).
+-- No fd/rg dependency → no shell quoting / PATH issues on Windows.
 
 local M = {}
 
@@ -15,111 +15,107 @@ local function get_backend()
     return "native"
 end
 
--- ── fd runner ────────────────────────────────────────────────────────────────
+-- ── Recursive file scanner ────────────────────────────────────────────────────
 
---- Run `fd --type f` across multiple directories.
---- Uses vim.fn.systemlist() (synchronous) to avoid jobstart/Windows async issues.
----@param folders string[]
----@param on_results fun(results: string[])
-local function run_fd(folders, on_results)
-    if #folders == 0 then
-        vim.schedule(function() on_results({}) end)
-        return
-    end
+local HARD_SKIP = { [".git"] = true, [".vs"] = true, ["node_modules"] = true }
 
-    local fd_exe = vim.fn.exepath("fd")
-    if fd_exe == "" then
-        local winget = vim.fn.expand("$LOCALAPPDATA") .. "\\Microsoft\\WinGet\\Links\\fd.exe"
-        if vim.fn.filereadable(winget) == 1 then
-            fd_exe = winget
-        else
-            vim.notify("[CW] fd not found in PATH. Install fd-find.", vim.log.levels.ERROR)
-            on_results({})
-            return
+--- Recursively collect files under `dir`.
+---@param dir        string
+---@param is_excluded fun(name:string, full:string):boolean|nil
+---@param results    string[]   accumulator
+---@param depth      integer
+---@param max_depth  integer
+local function scan_recursive(dir, is_excluded, results, depth, max_depth)
+    if depth > max_depth then return end
+    local handle = vim.loop.fs_scandir(dir)
+    if not handle then return end
+    while true do
+        local name, ftype = vim.loop.fs_scandir_next(handle)
+        if not name then break end
+        if name:sub(1, 1) == "." then goto continue end
+        if HARD_SKIP[name] then goto continue end
+        local full = dir .. "/" .. name
+        if is_excluded and is_excluded(name, full) then goto continue end
+        if ftype == "directory" then
+            scan_recursive(full, is_excluded, results, depth + 1, max_depth)
+        elseif ftype == "file" then
+            table.insert(results, full)
         end
+        ::continue::
     end
+end
 
-    local all = {}
+--- Collect all files across multiple root directories (synchronous, pure Lua).
+---@param folders    string[]
+---@param is_excluded fun(name:string, full:string):boolean|nil
+---@return string[]
+local function collect_files(folders, is_excluded)
+    local results = {}
     for _, dir in ipairs(folders) do
-        local native_dir = dir:gsub("/", "\\")
-        -- fd syntax: fd [PATTERN] [PATH]  -- pattern "" matches everything
-        -- Using --search-path avoids positional ambiguity with Windows drive paths
-        local cmd = { fd_exe, "--type", "f", "--hidden", "--follow",
-                      "--exclude", ".git",
-                      "--search-path", native_dir,
-                      "." }
-        local lines = vim.fn.systemlist(cmd)
-        for _, line in ipairs(lines) do
-            if line ~= "" then table.insert(all, line) end
-        end
+        scan_recursive(dir, is_excluded, results, 0, 20)
     end
-
-    vim.notify("[CW debug] fd total results: " .. #all, vim.log.levels.INFO)
-    on_results(all)
+    return results
 end
 
 -- ── File search ──────────────────────────────────────────────────────────────
 
---- Open a file picker with results collected by fd.
----@param folders string[]
----@param opts?   table  { prompt? }
+---@param folders    string[]
+---@param opts?      table  { prompt?, is_excluded? }
 function M.find_files(folders, opts)
     opts = opts or {}
     if #folders == 0 then
         vim.notify("[CW] No folders to search", vim.log.levels.WARN)
         return
     end
+
     local title   = opts.prompt or "CW Files"
+    local results = collect_files(folders, opts.is_excluded)
+
+    if #results == 0 then
+        vim.notify("[CW] No files found in workspace folders", vim.log.levels.WARN)
+        return
+    end
+
     local backend = get_backend()
 
-    run_fd(folders, function(results)
-        if #results == 0 then
-            vim.notify("[CW] No files found in workspace folders", vim.log.levels.WARN)
-            return
-        end
+    if backend == "telescope" then
+        local pickers    = require("telescope.pickers")
+        local finders    = require("telescope.finders")
+        local conf_t     = require("telescope.config").values
+        local make_entry = require("telescope.make_entry")
+        pickers.new({}, {
+            prompt_title = title,
+            finder = finders.new_table({
+                results     = results,
+                entry_maker = make_entry.gen_from_file({}),
+            }),
+            sorter    = conf_t.file_sorter({}),
+            previewer = conf_t.file_previewer({}),
+        }):find()
 
-        if backend == "telescope" then
-            local pickers    = require("telescope.pickers")
-            local finders    = require("telescope.finders")
-            local conf_t     = require("telescope.config").values
-            local make_entry = require("telescope.make_entry")
+    elseif backend == "fzf-lua" then
+        require("fzf-lua").fzf_exec(results, {
+            prompt    = title .. "> ",
+            previewer = "builtin",
+            actions   = require("fzf-lua").defaults.actions.files,
+        })
 
-            pickers.new({}, {
-                prompt_title = title,
-                finder = finders.new_table({
-                    results     = results,
-                    entry_maker = make_entry.gen_from_file({}),
-                }),
-                sorter    = conf_t.file_sorter({}),
-                previewer = conf_t.file_previewer({}),
-            }):find()
+    elseif backend == "snacks" then
+        require("snacks").picker.pick({
+            title  = title,
+            items  = vim.tbl_map(function(p) return { text = p, file = p } end, results),
+            format = "file",
+        })
 
-        elseif backend == "fzf-lua" then
-            require("fzf-lua").fzf_exec(results, {
-                prompt    = title .. "> ",
-                previewer = "builtin",
-                actions   = require("fzf-lua").defaults.actions.files,
-            })
-
-        elseif backend == "snacks" then
-            require("snacks").picker.pick({
-                title  = title,
-                items  = vim.tbl_map(function(p) return { text = p, file = p } end, results),
-                format = "file",
-            })
-
-        else
-            vim.ui.select(results, { prompt = title }, function(choice)
-                if choice then vim.cmd("edit " .. vim.fn.fnameescape(choice)) end
-            end)
-        end
-    end)
+    else
+        vim.ui.select(results, { prompt = title }, function(choice)
+            if choice then vim.cmd("edit " .. vim.fn.fnameescape(choice)) end
+        end)
+    end
 end
 
 -- ── Live grep ────────────────────────────────────────────────────────────────
 
---- Open a live grep across multiple root folders.
---- Paths are passed as explicit positional args to rg (jobstart list, no shell quoting).
 ---@param folders string[]
 ---@param opts?   table  { prompt? }
 function M.live_grep(folders, opts)
@@ -128,37 +124,38 @@ function M.live_grep(folders, opts)
         vim.notify("[CW] No folders to search", vim.log.levels.WARN)
         return
     end
+
     local title   = opts.prompt or "CW Grep"
     local backend = get_backend()
 
-    -- Build rg base args; directories appended as positional args (safe for spaces).
-    local rg_base = {
+    -- Build rg vimgrep_arguments with directories as positional args (table form =
+    -- no shell quoting; safe for paths with spaces).
+    local rg_args = {
         "rg", "--color=never", "--no-heading", "--with-filename",
         "--line-number", "--column", "--smart-case",
-        "--hidden", "--follow", "-g", "!.git", "--",
+        "--hidden", "--follow", "-g", "!.git",
     }
-    local rg_with_dirs = vim.list_extend(vim.deepcopy(rg_base), folders)
+    for _, dir in ipairs(folders) do
+        table.insert(rg_args, dir)
+    end
 
     if backend == "telescope" then
         require("telescope.builtin").live_grep(vim.tbl_extend("force", {
-            prompt_title       = title,
-            vimgrep_arguments  = rg_with_dirs,
+            prompt_title      = title,
+            vimgrep_arguments = rg_args,
         }, opts.telescope or {}))
 
     elseif backend == "fzf-lua" then
-        -- fzf-lua: pass dirs as separate rg args
-        local rg_opts_str = "--hidden --follow --column --line-number --no-heading "
-                         .. "--color=always -g '!.git' -- "
-                         .. table.concat(vim.tbl_map(vim.fn.shellescape, folders), " ")
         require("fzf-lua").live_grep(vim.tbl_extend("force", {
-            prompt   = title .. "> ",
-            rg_opts  = rg_opts_str,
+            prompt  = title .. "> ",
+            rg_opts = "--hidden --follow --column --line-number --no-heading "
+                   .. "--color=always -g '!.git' -- "
+                   .. table.concat(vim.tbl_map(vim.fn.shellescape, folders), " "),
         }, opts.fzf_lua or {}))
 
     elseif backend == "snacks" then
         require("snacks").picker.grep(vim.tbl_extend("force", {
-            title = title,
-            dirs  = folders,
+            title = title, dirs = folders,
         }, opts.snacks or {}))
 
     else
