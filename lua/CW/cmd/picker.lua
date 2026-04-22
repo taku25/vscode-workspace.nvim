@@ -41,10 +41,13 @@ local function run_fd(folders, on_results)
 
     local all = {}
     for _, dir in ipairs(folders) do
-        -- Convert to native path so fd handles it reliably on Windows
         local native_dir = dir:gsub("/", "\\")
+        -- fd syntax: fd [PATTERN] [PATH]  -- pattern "" matches everything
+        -- Using --search-path avoids positional ambiguity with Windows drive paths
         local cmd = { fd_exe, "--type", "f", "--hidden", "--follow",
-                      "--exclude", ".git", native_dir }
+                      "--exclude", ".git",
+                      "--search-path", native_dir,
+                      "" }  -- empty pattern = match all
         local lines = vim.fn.systemlist(cmd)
         for _, line in ipairs(lines) do
             if line ~= "" then table.insert(all, line) end
