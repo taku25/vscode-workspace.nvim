@@ -150,4 +150,4 @@ UEFN projects are auto-detected by the presence of `/Verse.org`, `/Fortnite.com`
 
 ## License
 
-MIT
+MIT © [taku25](https://github.com/taku25)
