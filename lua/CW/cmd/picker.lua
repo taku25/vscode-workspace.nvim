@@ -166,22 +166,13 @@ function M.live_grep(folders, opts)
     local title   = opts.prompt or "CW Grep"
     local backend = get_backend()
 
-    -- Build rg vimgrep_arguments with directories as positional args (table form =
-    -- no shell quoting; safe for paths with spaces).
-    local rg_args = {
-        "rg", "--color=never", "--no-heading", "--with-filename",
-        "--line-number", "--column", "--smart-case",
-        "--hidden", "--follow", "-g", "!.git",
-    }
-    for _, dir in ipairs(folders) do
-        table.insert(rg_args, dir)
-    end
-
     if backend == "telescope" then
-        require("telescope.builtin").live_grep(vim.tbl_extend("force", {
-            prompt_title      = title,
-            vimgrep_arguments = rg_args,
-        }, opts.telescope or {}))
+        require("telescope.builtin").live_grep({
+            prompt_title         = title,
+            search_dirs          = folders,
+            file_ignore_patterns = {},
+            additional_args      = { "--hidden", "--follow" },
+        })
 
     elseif backend == "fzf-lua" then
         require("fzf-lua").live_grep(vim.tbl_extend("force", {
