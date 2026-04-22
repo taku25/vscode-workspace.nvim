@@ -79,19 +79,57 @@ function M.find_files(folders, opts)
     local backend = get_backend()
 
     if backend == "telescope" then
-        local pickers    = require("telescope.pickers")
-        local finders    = require("telescope.finders")
-        local conf_t     = require("telescope.config").values
-        local make_entry = require("telescope.make_entry")
-        pickers.new({}, {
-            prompt_title = title,
-            finder = finders.new_table({
-                results     = results,
-                entry_maker = make_entry.gen_from_file({}),
-            }),
-            sorter    = conf_t.file_sorter({}),
-            previewer = conf_t.file_previewer({}),
-        }):find()
+        local pickers = require("telescope.pickers")
+        local finders = require("telescope.finders")
+        local conf_t  = require("telescope.config").values
+        local devicons_ok, devicons = pcall(require, "nvim-web-devicons")
+        local entry_display = require("telescope.pickers.entry_display")
+
+        local displayer = entry_display.create({
+            separator = " ",
+            items = devicons_ok
+                and { { width = 2 }, { remaining = true } }
+                or  { { remaining = true } },
+        })
+
+        vim.schedule(function()
+            pickers.new({ file_ignore_patterns = {} }, {
+                prompt_title = title,
+                finder = finders.new_table({
+                    results     = results,
+                    entry_maker = function(line)
+                        local native = line:gsub("/", "\\")
+                        local tail   = vim.fn.fnamemodify(line, ":t")
+                        local icon, icon_hl = "", "Normal"
+                        if devicons_ok then
+                            local ext = tail:match("%.([^.]+)$") or ""
+                            icon, icon_hl = devicons.get_icon(tail, ext, { default = true })
+                            icon = icon or ""
+                            icon_hl = icon_hl or "Normal"
+                        end
+                        return {
+                            value    = line,
+                            ordinal  = line,
+                            filename = native,
+                            path     = native,
+                            icon     = icon,
+                            icon_hl  = icon_hl,
+                            display  = function(entry)
+                                if devicons_ok then
+                                    return displayer({
+                                        { entry.icon, entry.icon_hl },
+                                        tail,
+                                    })
+                                end
+                                return displayer({ tail })
+                            end,
+                        }
+                    end,
+                }),
+                sorter    = conf_t.generic_sorter({}),
+                previewer = conf_t.file_previewer({}),
+            }):find()
+        end)
 
     elseif backend == "fzf-lua" then
         require("fzf-lua").fzf_exec(results, {
