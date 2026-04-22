@@ -3,10 +3,10 @@
 -- Favorites are shown as a collapsible root at the top, mixed with folder roots.
 
 local Tree     = require("nui.tree")
-local renderer = require("CW.ui.renderer")
-local filter   = require("CW.filter")
-local path     = require("CW.path")
-local store    = require("CW.store")
+local renderer = require("code-workspace.ui.renderer")
+local filter   = require("code-workspace.filter")
+local path     = require("code-workspace.path")
+local store    = require("code-workspace.store")
 
 local M = {}
 
@@ -106,7 +106,7 @@ end
 ---@return table       View { tree, ws, buf, expand_node, toggle_favorite,
 ---                          get_paths, refresh, save_state }
 function M.new(buf, ws)
-    local conf = require("CW.config").get()
+    local conf = require("code-workspace.config").get()
 
     local ignore_dirs = {}
     for _, d in ipairs(conf.ignore_dirs or {}) do ignore_dirs[d] = true end

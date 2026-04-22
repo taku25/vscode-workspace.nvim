@@ -2,30 +2,30 @@ if vim.g.loaded_cw == 1 then return end
 vim.g.loaded_cw = 1
 
 local subcommands = {
-    open    = { desc = "Open the explorer",         handler = function() require("CW.api").explorer_open() end },
-    close   = { desc = "Close the explorer",        handler = function() require("CW.api").explorer_close() end },
-    toggle  = { desc = "Toggle the explorer",       handler = function() require("CW.api").explorer_toggle() end },
-    focus   = { desc = "Focus current file",        handler = function() require("CW.api").explorer_focus() end },
-    refresh = { desc = "Refresh the explorer",      handler = function() require("CW.api").explorer_refresh() end },
+    open    = { desc = "Open the explorer",         handler = function() require("code-workspace.api").explorer_open() end },
+    close   = { desc = "Close the explorer",        handler = function() require("code-workspace.api").explorer_close() end },
+    toggle  = { desc = "Toggle the explorer",       handler = function() require("code-workspace.api").explorer_toggle() end },
+    focus   = { desc = "Focus current file",        handler = function() require("code-workspace.api").explorer_focus() end },
+    refresh = { desc = "Refresh the explorer",      handler = function() require("code-workspace.api").explorer_refresh() end },
     files = {
         desc    = "Find files across all workspace folders",
-        handler = function() require("CW.api").files() end,
+        handler = function() require("code-workspace.api").files() end,
     },
     grep = {
         desc    = "Live grep across all workspace folders",
-        handler = function() require("CW.api").grep() end,
+        handler = function() require("code-workspace.api").grep() end,
     },
     favorite_current = {
         desc    = "Toggle current buffer in Favorites",
-        handler = function() require("CW.api").favorite_current() end,
+        handler = function() require("code-workspace.api").favorite_current() end,
     },
     add_favorites = {
         desc    = "Add files to Favorites via picker",
-        handler = function() require("CW.api").add_favorites() end,
+        handler = function() require("code-workspace.api").add_favorites() end,
     },
     favorites_files = {
         desc    = "Open Favorites in picker",
-        handler = function() require("CW.api").favorites_files() end,
+        handler = function() require("code-workspace.api").favorites_files() end,
     },
 }
 

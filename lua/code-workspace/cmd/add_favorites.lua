@@ -1,11 +1,11 @@
 -- lua/CW/cmd/add_favorites.lua
 -- Add files/directories to Favorites via picker (UNX.nvim compatible command)
 
-local picker = require("CW.cmd.picker")
+local picker = require("code-workspace.cmd.picker")
 local M = {}
 
 function M.execute()
-    local explorer = require("CW.ui.explorer")
+    local explorer = require("code-workspace.ui.explorer")
     local ws = explorer.current_ws()
 
     if not ws then
@@ -13,7 +13,7 @@ function M.execute()
         return
     end
 
-    local workspace = require("CW.workspace")
+    local workspace = require("code-workspace.workspace")
     local folders   = workspace.get_folder_paths(ws)
     if #folders == 0 then
         vim.notify("[CW] No accessible folders in workspace", vim.log.levels.WARN)

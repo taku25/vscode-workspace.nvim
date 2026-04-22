@@ -2,7 +2,7 @@
 -- JSON persistence for favorites, tree state, etc.
 -- Storage root: stdpath("data")/code-workspace/
 
-local path = require("CW.path")
+local path = require("code-workspace.path")
 
 local M = {}
 

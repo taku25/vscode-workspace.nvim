@@ -1,7 +1,7 @@
 -- lua/CW/cmd/work_files.lua
 
-local workspace = require("CW.workspace")
-local picker    = require("CW.cmd.picker")
+local workspace = require("code-workspace.workspace")
+local picker    = require("code-workspace.cmd.picker")
 
 local M = {}
 
@@ -45,7 +45,7 @@ end
 ---@param ws? table  Workspace object (auto-detected if nil)
 function M.execute(ws)
     if ws then
-        local conf    = require("CW.config").get()
+        local conf    = require("code-workspace.config").get()
         local folders = workspace.get_folder_paths(ws)
         if #folders == 0 then
             vim.notify("[CW] No accessible folders in workspace", vim.log.levels.WARN)

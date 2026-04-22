@@ -3,8 +3,8 @@
 -- Winbar shows the workspace name (no tab switching needed).
 
 local Split     = require("nui.split")
-local ViewTree  = require("CW.ui.view.tree")
-local workspace = require("CW.workspace")
+local ViewTree  = require("code-workspace.ui.view.tree")
+local workspace = require("code-workspace.workspace")
 
 local M = {}
 
@@ -20,7 +20,7 @@ local state = {
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
 local function get_conf()
-    return require("CW.config").get()
+    return require("code-workspace.config").get()
 end
 
 local function is_open()
@@ -112,11 +112,11 @@ local function setup_keymaps(buf)
     end)
 
     map(km.find_files, function()
-        require("CW.cmd.work_files").execute(state.ws)
+        require("code-workspace.cmd.work_files").execute(state.ws)
     end)
 
     map(km.live_grep, function()
-        require("CW.cmd.work_grep").execute(state.ws)
+        require("code-workspace.cmd.work_grep").execute(state.ws)
     end)
 
     map("<2-LeftMouse>", function()
@@ -227,8 +227,8 @@ function M.toggle_favorite(file_path)
             return
         end
         -- Panel not open: update store directly
-        local s     = require("CW.store")
-        local p     = require("CW.path")
+        local s     = require("code-workspace.store")
+        local p     = require("code-workspace.path")
         local favs  = s.load_ws(ws.safe_name, "favorites") or {}
         local norm  = p.normalize(file_path)
         local added = true
@@ -258,7 +258,7 @@ function M.get_favorites(on_result)
             on_result(state.view.get_paths())
             return
         end
-        local s    = require("CW.store")
+        local s    = require("code-workspace.store")
         local favs = s.load_ws(ws.safe_name, "favorites") or {}
         local out  = {}
         for _, item in ipairs(favs) do

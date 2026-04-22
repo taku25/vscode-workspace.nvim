@@ -1,7 +1,7 @@
 -- lua/CW/workspace.lua
 -- .code-workspace file finder and parser
 
-local path = require("CW.path")
+local path = require("code-workspace.path")
 
 local M = {}
 
