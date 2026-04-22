@@ -14,8 +14,8 @@ local function current_ws()
     return require("CW.ui.explorer").current_ws()
 end
 
-function M.work_files(ws)   require("CW.cmd.work_files").execute(ws or current_ws()) end
-function M.work_grep(ws)    require("CW.cmd.work_grep").execute(ws or current_ws()) end
+function M.files(ws)   require("CW.cmd.work_files").execute(ws or current_ws()) end
+function M.grep(ws)    require("CW.cmd.work_grep").execute(ws or current_ws()) end
 
 function M.favorite_current()   require("CW.cmd.favorite_current").execute() end
 function M.favorites_files()    require("CW.cmd.favorites_files").execute() end

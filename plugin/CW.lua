@@ -7,13 +7,13 @@ local subcommands = {
     toggle  = { desc = "Toggle the explorer",       handler = function() require("CW.api").explorer_toggle() end },
     focus   = { desc = "Focus current file",        handler = function() require("CW.api").explorer_focus() end },
     refresh = { desc = "Refresh the explorer",      handler = function() require("CW.api").explorer_refresh() end },
-    work_files = {
+    files = {
         desc    = "Find files across all workspace folders",
-        handler = function() require("CW.api").work_files() end,
+        handler = function() require("CW.api").files() end,
     },
-    work_grep = {
+    grep = {
         desc    = "Live grep across all workspace folders",
-        handler = function() require("CW.api").work_grep() end,
+        handler = function() require("CW.api").grep() end,
     },
     favorite_current = {
         desc    = "Toggle current buffer in Favorites",
