@@ -5,28 +5,32 @@ local scanner = require("vscode-workspace.picker.scanner")
 
 local M = {}
 
--- ── Helper: vimgrep_arguments with Windows .bat shim support ─────────────────
+-- ── Path display helpers ──────────────────────────────────────────────────────
 
---- On Windows, rg (and fd) may be installed as a .bat shim (e.g. scoop < 0.3.1).
---- jobstart cannot run .bat files directly; wrap in "cmd.exe /C".
----@param cmd string  short tool name, e.g. "rg"
----@param base_args string[]
----@return string[]
-local function safe_argv(cmd, base_args)
-    if vim.fn.has("win32") ~= 1 then
-        local argv = { cmd }
-        vim.list_extend(argv, base_args)
-        return argv
+--- Returns a path_display function that shows paths relative to the nearest
+--- workspace root.  Falls back to cwd-relative when no prefix matches.
+---@param dirs string[]  workspace folder paths (forward-slash normalized)
+---@return function
+local function workspace_path_display(dirs)
+    -- Build prefix list: normalize to forward slashes, ensure trailing slash.
+    local prefixes = {}
+    for _, d in ipairs(dirs) do
+        local p = d:gsub("\\", "/")
+        if p:sub(-1) ~= "/" then p = p .. "/" end
+        table.insert(prefixes, p)
     end
-    local full = vim.fn.exepath(cmd)
-    local argv
-    if full ~= "" and full:lower():match("%.bat$") then
-        argv = { "cmd.exe", "/C", cmd }
-    else
-        argv = { full ~= "" and full or cmd }
+    -- Sort longest first so the most-specific root matches first.
+    table.sort(prefixes, function(a, b) return #a > #b end)
+
+    return function(_, path)
+        local norm = path:gsub("\\", "/")
+        for _, prefix in ipairs(prefixes) do
+            if norm:sub(1, #prefix) == prefix then
+                return norm:sub(#prefix + 1)   -- strip workspace root
+            end
+        end
+        return vim.fn.fnamemodify(path, ":.")  -- fallback: cwd-relative
     end
-    vim.list_extend(argv, base_args)
-    return argv
 end
 
 -- ── files ─────────────────────────────────────────────────────────────────────
@@ -54,8 +58,9 @@ function M.files(spec)
     if vim.fn.executable("fd") == 1 or vim.fn.executable("fdfind") == 1
             or vim.fn.executable("rg") == 1 then
         local picker_opts = {
-            prompt_title = spec.prompt,
-            search_dirs  = spec.dirs,
+            prompt_title  = spec.prompt,
+            search_dirs   = spec.dirs,
+            path_display  = workspace_path_display(spec.dirs),
             attach_mappings = attach,
         }
         require("telescope.builtin").find_files(picker_opts)
@@ -68,6 +73,7 @@ function M.files(spec)
         require("telescope.builtin").find_files({
             prompt_title    = spec.prompt,
             find_command    = cmd,
+            path_display    = workspace_path_display(spec.dirs),
             attach_mappings = attach,
         })
         return
@@ -81,10 +87,11 @@ function M.files(spec)
     local raw = scanner.collect(spec.dirs, spec.is_excluded)
     vim.schedule(function()
         local picker_opts = {
-            prompt_title = spec.prompt,
-            finder       = finders.new_table({ results = raw }),
-            sorter       = conf_t.generic_sorter({}),
-            previewer    = conf_t.file_previewer({}),
+            prompt_title  = spec.prompt,
+            finder        = finders.new_table({ results = raw }),
+            sorter        = conf_t.generic_sorter({}),
+            previewer     = conf_t.file_previewer({}),
+            path_display  = workspace_path_display(spec.dirs),
             attach_mappings = attach,
         }
         pickers.new({}, picker_opts):find()
