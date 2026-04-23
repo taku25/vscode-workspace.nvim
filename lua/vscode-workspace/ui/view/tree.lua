@@ -233,12 +233,6 @@ function M.new(buf, ws)
     local fr = tree:get_node("__favorites__")
     if fr then fr:expand() end
 
-    -- Restore directory expansion state
-    for id, _ in pairs(expanded_ids) do
-        local n = tree:get_node(id)
-        if n then n:expand() end
-    end
-
     -- ── View object ───────────────────────────────────────────────────────────
 
     local view = { tree = tree, ws = ws, buf = buf }
@@ -261,6 +255,16 @@ function M.new(buf, ws)
                     view.expand_node(cn)  -- recursively restore nested expansions
                 end
             end
+        end
+    end
+
+    -- ── Restore directory expansion state ────────────────────────────────────
+    -- Must run after view.expand_node is defined: expand_node does the lazy
+    -- filesystem scan required to populate children before marking them open.
+    for _, root_node in ipairs(all_roots) do
+        if root_node.type == "directory" and expanded_ids[root_node.id] then
+            root_node:expand()
+            view.expand_node(root_node)
         end
     end
 
