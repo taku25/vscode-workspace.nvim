@@ -12,7 +12,12 @@ function M.files(spec)
         return
     end
     vim.ui.select(results, { prompt = spec.prompt }, function(choice)
-        if choice then vim.cmd("edit " .. vim.fn.fnameescape(choice)) end
+        if not choice then return end
+        if spec.on_submit then
+            spec.on_submit(choice)
+        else
+            vim.cmd("edit " .. vim.fn.fnameescape(choice))
+        end
     end)
 end
 

@@ -15,6 +15,8 @@ function M.files(spec)
     local pickers       = require("telescope.pickers")
     local finders       = require("telescope.finders")
     local conf_t        = require("telescope.config").values
+    local actions       = require("telescope.actions")
+    local action_state  = require("telescope.actions.state")
     local entry_display = require("telescope.pickers.entry_display")
     local devicons_ok, devicons = pcall(require, "nvim-web-devicons")
 
@@ -56,6 +58,14 @@ function M.files(spec)
             }),
             sorter    = conf_t.generic_sorter({}),
             previewer = conf_t.file_previewer({}),
+            attach_mappings = spec.on_submit and function(prompt_bufnr)
+                actions.select_default:replace(function()
+                    actions.close(prompt_bufnr)
+                    local sel = action_state.get_selected_entry()
+                    if sel then spec.on_submit(sel.path or sel.value) end
+                end)
+                return true
+            end or nil,
         }):find()
     end)
 end

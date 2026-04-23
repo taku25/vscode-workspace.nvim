@@ -67,7 +67,7 @@ end
 
 --- Open a file picker across the given directories.
 ---@param dirs  string[]
----@param opts? { prompt?: string, is_excluded?: fun(name:string, full:string):boolean }
+---@param opts? { prompt?: string, is_excluded?: fun(name:string, full:string):boolean, on_submit?: fun(path:string) }
 function M.find_files(dirs, opts)
     opts = opts or {}
     if #dirs == 0 then
@@ -79,6 +79,7 @@ function M.find_files(dirs, opts)
         prompt      = opts.prompt or "CW Files",
         dirs        = dirs,
         is_excluded = opts.is_excluded,
+        on_submit   = opts.on_submit,
     })
 end
 

@@ -11,10 +11,17 @@ function M.files(spec)
         vim.notify("[CW] No files found in workspace folders", vim.log.levels.WARN)
         return
     end
+    local fzf = require("fzf-lua")
     require("fzf-lua").fzf_exec(results, {
         prompt    = spec.prompt .. "> ",
         previewer = "builtin",
-        actions   = require("fzf-lua").defaults.actions.files,
+        actions   = spec.on_submit and {
+            ["default"] = function(selected)
+                if selected and selected[1] then
+                    spec.on_submit(selected[1])
+                end
+            end,
+        } or fzf.defaults.actions.files,
     })
 end
 

@@ -23,10 +23,10 @@ function M.execute()
     -- Collect all files and let the user multi-select (or single-select).
     -- After selection, toggle each one into favorites.
     picker.find_files(folders, {
-        prompt      = "Add to Favorites",
-        on_select   = function(selected_paths)
-            for _, p in ipairs(selected_paths) do
-                explorer.toggle_favorite(p)
+        prompt    = "Add to Favorites",
+        on_submit = function(selected_path)
+            if selected_path and selected_path ~= "" then
+                explorer.toggle_favorite(selected_path)
             end
         end,
     })

@@ -11,11 +11,18 @@ function M.files(spec)
         vim.notify("[CW] No files found in workspace folders", vim.log.levels.WARN)
         return
     end
-    require("snacks").picker.pick({
+    local picker_opts = {
         title  = spec.prompt,
         items  = vim.tbl_map(function(p) return { text = p, file = p } end, results),
         format = "file",
-    })
+    }
+    if spec.on_submit then
+        picker_opts.confirm = function(picker, item)
+            picker:close()
+            if item then spec.on_submit(item.file or item.text) end
+        end
+    end
+    require("snacks").picker.pick(picker_opts)
 end
 
 function M.grep(spec)
