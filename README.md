@@ -1,6 +1,6 @@
 # vscode-workspace.nvim
 
-<img width="1222" height="817" alt="image" src="https://github.com/user-attachments/assets/a6e0641d-0119-4f8e-b732-609998c875dd" />
+<img width="1222" height="818" alt="image" src="https://github.com/user-attachments/assets/bef48a91-f9a9-4aa3-9e9a-3ad2094ebdb5" />
 
 A Neovim plugin for working with [VS Code `.code-workspace`](https://code.visualstudio.com/docs/editor/workspaces) files.  
 Multi-root folder tree, favorites, and cross-workspace file/grep search — no VS Code required.
