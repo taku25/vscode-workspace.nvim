@@ -105,9 +105,10 @@ local function setup_keymaps(buf)
         local file_path = (node and node.path and node.type == "file")
                           and node.path or vim.fn.expand("#:p")
         if file_path and file_path ~= "" then
-            local added = state.view.toggle_favorite(file_path)
-            vim.notify(added and "Added to Favorites" or "Removed from Favorites",
-                vim.log.levels.INFO)
+            state.view.toggle_favorite(file_path, function(added)
+                vim.notify(added and "Added to Favorites" or "Removed from Favorites",
+                    vim.log.levels.INFO)
+            end)
         end
     end)
 
@@ -117,6 +118,56 @@ local function setup_keymaps(buf)
 
     map(km.live_grep, function()
         require("vscode-workspace.cmd.work_grep").execute(state.ws)
+    end)
+
+    -- Favorites folder operations
+    map(km.fav_add_folder, function()
+        if not state.view then return end
+        local node = state.view.tree and state.view.tree:get_node()
+        state.view.add_fav_folder(node)
+    end)
+
+    map(km.fav_rename_folder, function()
+        if not state.view then return end
+        local node = state.view.tree and state.view.tree:get_node()
+        state.view.rename_fav_folder(node)
+    end)
+
+    map(km.fav_remove_folder, function()
+        if not state.view then return end
+        local node = state.view.tree and state.view.tree:get_node()
+        state.view.remove_fav_folder(node)
+    end)
+
+    map(km.fav_move, function()
+        if not state.view then return end
+        local node = state.view.tree and state.view.tree:get_node()
+        state.view.move_to_fav_folder(node)
+    end)
+
+    -- File system operations
+    map(km.file_create, function()
+        if not state.view then return end
+        local node = state.view.tree and state.view.tree:get_node()
+        state.view.create_file(node)
+    end)
+
+    map(km.dir_create, function()
+        if not state.view then return end
+        local node = state.view.tree and state.view.tree:get_node()
+        state.view.create_dir(node)
+    end)
+
+    map(km.file_delete, function()
+        if not state.view then return end
+        local node = state.view.tree and state.view.tree:get_node()
+        state.view.delete_node(node)
+    end)
+
+    map(km.file_rename, function()
+        if not state.view then return end
+        local node = state.view.tree and state.view.tree:get_node()
+        state.view.rename_node(node)
     end)
 
     map("<2-LeftMouse>", function()
@@ -221,9 +272,10 @@ function M.toggle_favorite(file_path)
         if not ws then return end
         state.ws = ws
         if state.view then
-            local added = state.view.toggle_favorite(file_path)
-            vim.notify(added and "Added to Favorites" or "Removed from Favorites",
-                vim.log.levels.INFO)
+            state.view.toggle_favorite(file_path, function(added)
+                vim.notify(added and "Added to Favorites" or "Removed from Favorites",
+                    vim.log.levels.INFO)
+            end)
             return
         end
         -- Panel not open: update store directly
