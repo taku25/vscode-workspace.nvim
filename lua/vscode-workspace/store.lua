@@ -1,18 +1,19 @@
 -- lua/CW/store.lua
 -- JSON persistence for favorites, tree state, etc.
--- Storage root: stdpath("data")/code-workspace/
+-- Storage root: stdpath("cache")/vscode-workspace/
 
 local path = require("vscode-workspace.path")
 
 local M = {}
 
 local function get_storage_dir()
-    return path.join(vim.fn.stdpath("data"), "code-workspace")
+    return path.join(vim.fn.stdpath("cache"), "vscode-workspace")
 end
 
---- Return the full storage path for a given workspace and key.
----@param ws_safe_name string  Result of path.safe_name() on the workspace path
----@param key string           e.g. "favorites", "state"
+--- Return the full storage path for a given workspace safe-name and key.
+--- safe_name is expected to be in the form "{wsname}_{sha256_16}" (see workspace.lua).
+---@param ws_safe_name string
+---@param key string  e.g. "favorites", "tree_state"
 ---@return string
 function M.get_path(ws_safe_name, key)
     return path.join(get_storage_dir(), ws_safe_name .. "_" .. key .. ".json")

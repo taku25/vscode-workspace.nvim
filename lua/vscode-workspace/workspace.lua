@@ -84,9 +84,24 @@ function M.parse(ws_path)
     local folders = {}
     for _, entry in ipairs(data.folders or {}) do
         if type(entry) == "table" and entry.path then
+            local resolved = resolve_folder_path(entry.path, ws_dir)
+            -- Derive display name: resolve "." / ".." to the real directory name
+            local display_name = entry.name
+            if not display_name then
+                local tail = vim.fn.fnamemodify(resolved, ":t")
+                if tail == "." or tail == ".." or tail == "" then
+                    -- fnamemodify with :p resolves relative parts, then grab tail
+                    display_name = vim.fn.fnamemodify(vim.fn.resolve(resolved), ":t")
+                else
+                    display_name = tail
+                end
+                if not display_name or display_name == "" then
+                    display_name = path.basename(ws_dir)  -- last-resort fallback
+                end
+            end
             table.insert(folders, {
-                name = entry.name or path.basename(entry.path),
-                path = resolve_folder_path(entry.path, ws_dir),
+                name     = display_name,
+                path     = resolved,
                 raw_path = entry.path,
             })
         end
@@ -113,11 +128,16 @@ function M.parse(ws_path)
         exclude_map[k] = v
     end
 
+    -- Compute a collision-resistant safe name: "{wsname}_{sha256[:16]}"
+    -- This matches UNL.nvim's convention and avoids full-path collisions.
+    local ws_hash     = vim.fn.sha256(path.normalize(ws_path)):sub(1, 16)
+    local ws_safe_name = ws_name .. "_" .. ws_hash
+
     return {
         ws_path            = path.normalize(ws_path),
         ws_dir             = path.normalize(ws_dir),
         name               = ws_name,
-        safe_name          = path.safe_name(ws_path),
+        safe_name          = ws_safe_name,
         folders            = folders,
         is_uefn            = uefn,
         verse_project_root = verse_project_root,

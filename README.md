@@ -68,6 +68,24 @@ Default keymaps inside the explorer buffer:
 | `R` | Refresh tree |
 | `q` | Close explorer |
 
+### Favorites folder keymaps
+
+| Key | Action |
+|---|---|
+| `<C-N>` | Add new favorites folder |
+| `<C-r>` | Rename favorites folder under cursor |
+| `<C-d>` | Remove favorites folder under cursor (files moved to Default) |
+| `m` | Move file under cursor to another favorites folder |
+
+### File system keymaps
+
+| Key | Action |
+|---|---|
+| `a` | Create new file in directory under cursor |
+| `A` | Create new directory in directory under cursor |
+| `d` | Delete file / directory under cursor (with confirmation) |
+| `r` | Rename file / directory under cursor |
+
 ## Configuration
 
 ```lua
@@ -102,8 +120,17 @@ require("CW").setup({
         split           = "i",
         refresh         = "R",
         toggle_favorite = "b",
-        find_files      = "f",
-        live_grep       = "g",
+        fav_add_folder    = "<C-N>",
+        fav_rename_folder = "<C-r>",
+        fav_remove_folder = "<C-d>",
+        fav_move          = "m",
+        find_files        = "f",
+        live_grep         = "g",
+        -- File system operations
+        file_create       = "a",
+        dir_create        = "A",
+        file_delete       = "d",
+        file_rename       = "r",
     },
 
     -- Optional: fully override picker behavior
