@@ -258,17 +258,7 @@ function M.new(buf, ws)
         end
     end
 
-    -- ── Restore directory expansion state ────────────────────────────────────
-    -- Must run after view.expand_node is defined: expand_node does the lazy
-    -- filesystem scan required to populate children before marking them open.
-    for _, root_node in ipairs(all_roots) do
-        if root_node.type == "directory" and expanded_ids[root_node.id] then
-            root_node:expand()
-            view.expand_node(root_node)
-        end
-    end
-
-    --- Return folder display paths for picker: [{display="Work/Sub", name="Sub"}, ...]
+    --- Return folder display pathsfor picker: [{display="Work/Sub", name="Sub"}, ...]
     local function get_folder_paths()
         local folder_defs = {}
         for _, item in ipairs(fav_data) do
@@ -663,6 +653,24 @@ function M.new(buf, ws)
     end
 
     tree:render()
+
+    -- ── Restore directory expansion state (deferred) ─────────────────────────
+    -- vim.schedule ensures nui.tree's internal state is fully settled after the
+    -- first render before we scan subdirectories and call set_nodes / get_node.
+    -- Same pattern as UNX.nvim restore_expansion_explicit.
+    if not vim.tbl_isempty(expanded_ids) then
+        vim.schedule(function()
+            if not vim.api.nvim_buf_is_valid(buf) then return end
+            for _, root_node in ipairs(tree:get_nodes()) do
+                if root_node.type == "directory" and expanded_ids[root_node.id] then
+                    root_node:expand()
+                    view.expand_node(root_node)
+                end
+            end
+            tree:render()
+        end)
+    end
+
     return view
 end
 
