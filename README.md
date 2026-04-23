@@ -16,7 +16,7 @@ Works with any `.code-workspace` project, including **UEFN (Unreal Editor for Fo
 - **`files.exclude` support** — workspace settings patterns applied to tree and file search
 - **UEFN detection** — auto-detects Verse projects (highlights UEFN roots with ⚡)
 - **No external tools required** — file scanning uses `vim.loop` (pure Lua)
-- Picker auto-detection: **telescope → fzf-lua → snacks → vim.ui.select**
+- **Flexible picker integration** — telescope / fzf-lua / snacks.nvim supported out of the box, fully customizable via `picker_function`
 
 ## Requirements
 
@@ -133,15 +133,123 @@ require("CW").setup({
         file_rename       = "r",
     },
 
-    -- Optional: fully override picker behavior
-    -- work_files = function(folders)
-    --     require("telescope.builtin").find_files({ search_dirs = folders })
-    -- end,
-    -- work_grep = function(folders)
-    --     require("telescope.builtin").live_grep({ search_dirs = folders })
+    -- Picker backend: "telescope" | "fzf-lua" | "snacks" | "native"
+    -- If omitted, auto-detected in the order above.
+    -- picker = "telescope",
+
+    -- Full override: receive a spec table and open your own picker.
+    -- When set, `picker` is ignored.
+    -- picker_function = function(spec)
+    --     -- spec.type    = "files" | "grep" | "static"
+    --     -- spec.prompt  = string
+    --     -- spec.dirs    = string[]          (files / grep only)
+    --     -- spec.items   = string[]          (static only)
+    --     -- spec.on_submit = function(path)  called with the selected item
+    --     if spec.type == "files" then
+    --         require("telescope.builtin").find_files({
+    --             prompt_title  = spec.prompt,
+    --             search_dirs   = spec.dirs,
+    --             attach_mappings = function(_, map)
+    --                 map("i", "<CR>", function(pb)
+    --                     local sel = require("telescope.actions.state").get_selected_entry()
+    --                     require("telescope.actions").close(pb)
+    --                     if sel then spec.on_submit(sel[1]) end
+    --                 end)
+    --                 return true
+    --             end,
+    --         })
+    --     elseif spec.type == "grep" then
+    --         require("telescope.builtin").live_grep({
+    --             prompt_title = spec.prompt,
+    --             search_dirs  = spec.dirs,
+    --         })
+    --     else  -- static (favorites folder picker, etc.)
+    --         vim.ui.select(spec.items, { prompt = spec.prompt }, function(choice)
+    --             if choice then spec.on_submit(choice) end
+    --         end)
+    --     end
     -- end,
 })
 ```
+
+## Picker Integration
+
+Pickers are used for `:CW files`, `:CW grep`, favorites folder selection, and the add-favorites flow.
+
+### Backend auto-detection (default)
+
+When `picker` is not set, the plugin auto-detects in this order:
+
+| Priority | Backend | Plugin |
+|----------|---------|--------|
+| 1 | `"telescope"` | [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) |
+| 2 | `"fzf-lua"` | [fzf-lua](https://github.com/ibhagwan/fzf-lua) |
+| 3 | `"snacks"` | [snacks.nvim](https://github.com/folke/snacks.nvim) |
+| 4 | `"native"` | `vim.ui.select` (built-in fallback) |
+
+### Selecting a backend explicitly
+
+```lua
+require("CW").setup({
+    picker = "fzf-lua",   -- skip auto-detect, always use fzf-lua
+})
+```
+
+### Fully custom picker via `picker_function`
+
+Set `picker_function` to take complete control. The function receives a **spec table** and must
+open a picker, then call `spec.on_submit(selected)` when the user confirms:
+
+```lua
+require("CW").setup({
+    picker_function = function(spec)
+        -- spec.type      "files" | "grep" | "static"
+        -- spec.prompt    string — prompt / title for the picker
+        -- spec.dirs      string[] — root dirs to search (files / grep)
+        -- spec.items     string[] — pre-built list of items (static)
+        -- spec.on_submit function(item) — call this with the chosen item
+
+        if spec.type == "files" then
+            require("telescope.builtin").find_files({
+                prompt_title = spec.prompt,
+                search_dirs  = spec.dirs,
+                -- wire on_submit to telescope's <CR>:
+                attach_mappings = function(pb, map)
+                    map("i", "<CR>", function()
+                        local sel = require("telescope.actions.state").get_selected_entry()
+                        require("telescope.actions").close(pb)
+                        if sel then spec.on_submit(sel[1]) end
+                    end)
+                    return true
+                end,
+            })
+
+        elseif spec.type == "grep" then
+            require("telescope.builtin").live_grep({
+                prompt_title = spec.prompt,
+                search_dirs  = spec.dirs,
+            })
+
+        else  -- "static" — favorites folder picker, etc.
+            require("telescope.pickers").new({}, {
+                prompt_title = spec.prompt,
+                finder = require("telescope.finders").new_table({ results = spec.items }),
+                sorter = require("telescope.config").values.generic_sorter({}),
+                attach_mappings = function(pb)
+                    require("telescope.actions").select_default:replace(function()
+                        local sel = require("telescope.actions.state").get_selected_entry()
+                        require("telescope.actions").close(pb)
+                        if sel then spec.on_submit(sel[1]) end
+                    end)
+                    return true
+                end,
+            }):find()
+        end
+    end,
+})
+```
+
+`picker_function` takes priority over the `picker` setting.
 
 ## Favorites
 
