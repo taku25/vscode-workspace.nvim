@@ -181,13 +181,20 @@ function M.find(start_path, on_result)
     end, files)
 
     if on_result then
-        vim.ui.select(labels, { prompt = "Select workspace" }, function(_, idx)
-            if idx then
-                on_result(M.parse(files[idx]))
-            else
+        require("vscode-workspace.picker").select(labels, {
+            prompt    = "Select workspace",
+            on_submit = function(choice)
+                if not choice then on_result(nil); return end
+                -- find the index that matches the chosen label
+                for i, label in ipairs(labels) do
+                    if label == choice then
+                        on_result(M.parse(files[i]))
+                        return
+                    end
+                end
                 on_result(nil)
-            end
-        end)
+            end,
+        })
         return nil  -- async path
     else
         -- Synchronous fallback: return first (for internal use)
