@@ -408,7 +408,7 @@ Supported glob syntax:
 
 Favorites are shown at the top of the explorer tree under a ★ node.
 They are organized into named folders and persisted per workspace under: >
-    {stdpath("data")}/code-workspace/
+    {stdpath("cache")}/vscode-workspace/
 <
 
 Adding / removing~

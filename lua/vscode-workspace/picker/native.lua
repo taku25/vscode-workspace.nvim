@@ -25,6 +25,21 @@ function M.files(spec)
     end)
 end
 
+function M.files_static(spec)
+    if #spec.items == 0 then
+        vim.notify("[CW] No files to show", vim.log.levels.WARN)
+        return
+    end
+    vim.ui.select(spec.items, { prompt = spec.prompt }, function(choice)
+        if not choice then return end
+        if spec.on_submit then
+            spec.on_submit(choice)
+        else
+            vim.cmd("edit " .. vim.fn.fnameescape(choice))
+        end
+    end)
+end
+
 function M.grep(spec)
     vim.ui.input({ prompt = "Grep pattern: " }, function(pattern)
         if not pattern or pattern == "" then return end

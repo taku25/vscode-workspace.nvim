@@ -127,6 +127,13 @@ local function resolve_grep()
     return _resolved_grep
 end
 
+--- Reset cached tool resolution. Call after config.setup() so that changes to
+--- scanner.files.cmd / scanner.grep.cmd are picked up on the next use.
+function M.reset()
+    _resolved_files = nil
+    _resolved_grep  = nil
+end
+
 -- ── Public accessors ─────────────────────────────────────────────────────────
 
 --- Which files-scan backend will be used.

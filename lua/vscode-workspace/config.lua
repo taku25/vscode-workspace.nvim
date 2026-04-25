@@ -108,6 +108,8 @@ local current = vim.deepcopy(defaults)
 function M.setup(opts)
     current = vim.tbl_deep_extend("force", defaults, opts or {})
     M._apply_highlights()
+    -- Invalidate scanner cache so new scanner.* settings are picked up.
+    require("vscode-workspace.picker.scanner").reset()
 end
 
 function M.get()
