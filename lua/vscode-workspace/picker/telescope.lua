@@ -13,14 +13,8 @@ local M = {}
 ---@param dirs string[]
 ---@return function
 local function make_relative_entry_maker(dirs)
-    local rel        = path.workspace_path_display(dirs)
+    local rel             = path.workspace_path_display(dirs)
     local devicons_ok, devicons = pcall(require, "nvim-web-devicons")
-    local entry_display = require("telescope.pickers.entry_display")
-
-    local displayer
-    if devicons_ok then
-        displayer = entry_display.create({ separator = " ", items = { { width = 2 }, { remaining = true } } })
-    end
 
     return function(line)
         if not line or line == "" then return nil end
@@ -31,11 +25,15 @@ local function make_relative_entry_maker(dirs)
             path     = line,
             filename = line,
         }
-        if devicons_ok and displayer then
-            local ext        = vim.fn.fnamemodify(line, ":e")
-            local icon, hl   = devicons.get_icon(line, ext, { default = true })
-            entry.display = function(_)
-                return displayer({ { icon, hl }, display_path })
+        if devicons_ok then
+            local ext      = vim.fn.fnamemodify(line, ":e")
+            local icon, hl = devicons.get_icon(line, ext, { default = true })
+            if icon then
+                entry.display = function(_)
+                    return icon .. " " .. display_path, { { { 0, #icon }, hl } }
+                end
+            else
+                entry.display = display_path
             end
         else
             entry.display = display_path
