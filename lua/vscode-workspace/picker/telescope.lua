@@ -95,20 +95,21 @@ function M.files_static(spec)
     end
 
     vim.schedule(function()
-        pickers.new({}, {
-            prompt_title = spec.prompt,
-            finder       = finders.new_table({
-                results      = spec.items,
-                entry_maker  = make_relative_entry_maker(spec.dirs),
+        pickers.new({
+            prompt_title         = spec.prompt,
+            finder               = finders.new_table({
+                results     = spec.items,
+                entry_maker = make_relative_entry_maker(spec.dirs or {}),
             }),
-            sorter    = conf_t.generic_sorter({}),
-            previewer = conf_t.file_previewer({}),
-            attach_mappings = attach,
+            sorter               = conf_t.generic_sorter({}),
+            previewer            = conf_t.file_previewer({}),
+            -- Override global file_ignore_patterns: we are showing a curated list
+            -- of pre-resolved paths (e.g. favorites), so no filtering should apply.
+            file_ignore_patterns = {},
+            attach_mappings      = attach,
         }):find()
     end)
 end
-
-
 
 function M.grep(spec)
     require("telescope.builtin").live_grep({
