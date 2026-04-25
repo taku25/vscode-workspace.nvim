@@ -8,6 +8,7 @@ local workspace = require("vscode-workspace.workspace")
 local renderer  = require("vscode-workspace.ui.renderer")
 local store     = require("vscode-workspace.store")
 local path      = require("vscode-workspace.path")
+local preview   = require("vscode-workspace.ui.preview")
 
 local M = {}
 
@@ -103,10 +104,63 @@ local function setup_keymaps(buf)
         if state.view and state.view.refresh then state.view.refresh() end
     end)
 
+    -- マルチセレクト: <Space> でトグル（nowait は map() で設定済み）
+    if km.select_toggle then
+        map(km.select_toggle, function()
+            if not state.view then return end
+            local node = state.view.tree and state.view.tree:get_node()
+            if not node or not node.path then return end
+            local ct = node.extra and node.extra.cw_type
+            if ct == "root" or ct == "fav_root" or ct == "fav_folder" or ct == "recent_root" then return end
+            state.view.toggle_selected(node.path)
+        end)
+    end
+
+    -- 選択クリア
+    if km.clear_selection then
+        map(km.clear_selection, function()
+            if not state.view then return end
+            if state.view.selected_count() > 0 then
+                state.view.clear_selected()
+            end
+        end)
+    end
+
+    -- プレビュートグル
+    if km.preview_toggle then
+        map(km.preview_toggle, function()
+            if not state.view then return end
+            local node = state.view.tree and state.view.tree:get_node()
+            if not node or not node.path then return end
+            if node.type == "directory" then
+                preview.toggle_enabled()
+                return
+            end
+            preview.toggle(node.path, state.win)
+        end)
+    end
+
     map(km.toggle_favorite, function()
         if not state.view then return end
+
+        -- マルチセレクト中: 一括トグル
+        if state.view.selected_count() > 0 then
+            state.view.toggle_favorites_multi(function(removed, added, folder)
+                if removed > 0 then
+                    vim.notify(string.format("[CW] ☆ Removed %d file(s) from Favorites", removed),
+                        vim.log.levels.INFO)
+                end
+                if added > 0 then
+                    local loc = folder and ("'" .. folder .. "'") or "root"
+                    vim.notify(string.format("[CW] ★ Added %d file(s) to %s", added, loc),
+                        vim.log.levels.INFO)
+                end
+            end)
+            return
+        end
+
+        -- シングル（既存ロジック）
         local node = state.view.tree and state.view.tree:get_node()
-        -- Allow files and real directories (not workspace roots or fav virtual nodes)
         local cw_type = node and node.extra and node.extra.cw_type
         local is_real = cw_type ~= "root" and cw_type ~= "fav_root"
                         and cw_type ~= "fav_folder" and cw_type ~= "recent_root"
@@ -114,7 +168,7 @@ local function setup_keymaps(buf)
                           and node.path or vim.fn.expand("#:p")
         if file_path and file_path ~= "" then
             state.view.toggle_favorite(file_path, function(added)
-                vim.notify(added and "Added to Favorites" or "Removed from Favorites",
+                vim.notify(added and "[CW] ★ Added to Favorites" or "[CW] ☆ Removed from Favorites",
                     vim.log.levels.INFO)
             end)
         end
@@ -303,6 +357,7 @@ function M.open(opts)
             pattern  = tostring(state.win),
             once     = true,
             callback = function()
+                preview.close()
                 if state.view then state.view.save_state() end
                 if state.autocmd_group then
                     pcall(vim.api.nvim_del_augroup_by_id, state.autocmd_group)
@@ -311,6 +366,45 @@ function M.open(opts)
                 state.split = nil
                 state.win   = nil
                 state.view  = nil
+            end,
+        })
+
+        -- Auto-preview on cursor move (buffer-local)
+        local debounce_timer = nil
+        vim.api.nvim_create_autocmd("CursorMoved", {
+            group  = state.autocmd_group,
+            buffer = buf,
+            callback = function()
+                if not preview.is_enabled() then return end
+                if not state.view then return end
+                local node = state.view.tree and state.view.tree:get_node()
+                if not node or not node.path or node.type == "directory" then
+                    return
+                end
+                if debounce_timer then
+                    pcall(vim.loop.timer_stop, debounce_timer)
+                    debounce_timer = nil
+                end
+                local debounce_ms = (get_conf().preview or {}).debounce_ms or 150
+                debounce_timer = vim.defer_fn(function()
+                    debounce_timer = nil
+                    if not state.win or not vim.api.nvim_win_is_valid(state.win) then return end
+                    if preview.is_enabled() then
+                        preview.show(node.path, state.win)
+                    end
+                end, debounce_ms)
+            end,
+        })
+
+        vim.api.nvim_create_autocmd("BufLeave", {
+            group  = state.autocmd_group,
+            buffer = buf,
+            callback = function()
+                if debounce_timer then
+                    pcall(vim.loop.timer_stop, debounce_timer)
+                    debounce_timer = nil
+                end
+                preview.close()
             end,
         })
     end
@@ -324,6 +418,7 @@ end
 
 function M.close()
     if not is_open() then return end
+    preview.close()
     if state.view then state.view.save_state() end
     if state.autocmd_group then
         pcall(vim.api.nvim_del_augroup_by_id, state.autocmd_group)

@@ -28,6 +28,7 @@ local defaults = {
         CWFileIcon       = { link = "Comment" },
         CWFileName       = { link = "Normal" },
         CWCurrentFile    = { bold = true, underline = true },
+        CWSelectedFile   = { link = "Visual" },
         CWIndentMarker   = { link = "NonText" },
         CWRootName       = { link = "Title" },
         CWTabActive      = { link = "String" },
@@ -48,6 +49,11 @@ local defaults = {
         fav_move          = "m",
         find_files        = "f",
         live_grep         = "g",
+        -- Multi-select
+        select_toggle   = "<Space>",
+        clear_selection = "<Esc>",
+        -- Preview
+        preview_toggle  = "p",
         -- File system operations
         file_create       = "a",
         dir_create        = "A",
@@ -55,11 +61,21 @@ local defaults = {
         file_rename       = "r",
         file_copy         = "y",
         file_cut          = "x",
-        file_paste        = "p",
+        file_paste        = "P",
         -- Workspace switching
         switch_workspace  = "W",  -- shows saved workspaces picker (:CW workspaces)
         -- Favorite folder icon
         fav_set_icon      = "<C-i>",
+    },
+    -- ── Preview configuration ─────────────────────────────────────────────────
+    preview = {
+        auto             = true,    -- CursorMoved で自動表示
+        debounce_ms      = 150,
+        width_pct        = 0.80,
+        height_pct       = 0.80,
+        min_width        = 20,
+        min_height       = 5,
+        max_file_size_kb = 512,
     },
     -- ── Recent files configuration ────────────────────────────────────────────
     -- Max number of recently opened files to show in the Recent section of the tree.

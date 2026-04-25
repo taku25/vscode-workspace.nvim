@@ -11,6 +11,10 @@ local M = {}
 -- Set by explorer.lua on BufEnter; used to highlight the active file in the tree.
 M._current_file = nil
 
+-- Set of selected paths (normalized). { [norm_path] = original_path }
+-- Updated by view.toggle_selected / view.clear_selected in tree.lua.
+M._selected_paths = {}
+
 local function get_conf()
     return require("vscode-workspace.config").get()
 end
@@ -100,17 +104,26 @@ function M.prepare_node(node)
 
     line:append(icon_text, icon_hl)
 
-    -- Name: use CWCurrentFile when this node is the active buffer
-    local is_current = M._current_file ~= nil
+    -- Name: use CWCurrentFile when this node is the active buffer, CWSelectedFile when selected
+    local is_current  = M._current_file ~= nil
         and node.path ~= nil
         and path.equal(node.path, M._current_file)
+    local is_selected = node.path ~= nil
+        and M._selected_paths[path.normalize(node.path)] ~= nil
     local name_hl
     if extra_type == "root" or extra_type == "fav_root" or extra_type == "recent_root" then
         name_hl = "CWRootName"
+    elseif is_selected then
+        name_hl = "CWSelectedFile"
     elseif is_current then
         name_hl = "CWCurrentFile"
     else
         name_hl = "CWFileName"
+    end
+
+    -- Selection marker (〇) shown just before the file name
+    if is_selected then
+        line:append("〇 ", "CWSelectedFile")
     end
     line:append(node.text, name_hl)
 

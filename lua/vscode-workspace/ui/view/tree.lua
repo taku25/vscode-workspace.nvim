@@ -386,10 +386,9 @@ function M.new(buf, ws)
     ---@param file_path string
     ---@param on_done? fun(added: boolean)
     function view.toggle_favorite(file_path, on_done)
-        local norm = path.normalize(file_path)
-        -- Remove if already present
+        -- Remove if already present (path.equal for case-insensitive Windows comparison)
         for i, item in ipairs(fav_data) do
-            if not item.is_folder and path.normalize(item.path) == norm then
+            if not item.is_folder and path.equal(item.path, file_path) then
                 table.remove(fav_data, i)
                 store.save_ws(ws.safe_name, "favorites", fav_data)
                 rebuild_favorites()
@@ -701,6 +700,139 @@ function M.new(buf, ws)
             rebuild_favorites()
             tree:render()
         end })
+    end
+
+    -- ── Multi-select ──────────────────────────────────────────────────────────
+
+    local renderer_mod = require("vscode-workspace.ui.renderer")
+
+    --- ファイルノードの選択をトグルする。選択追加なら true、解除なら false を返す。
+    function view.toggle_selected(file_path)
+        if not file_path then return false end
+        local norm = path.normalize(file_path)
+        if renderer_mod._selected_paths[norm] then
+            renderer_mod._selected_paths[norm] = nil
+            tree:render()
+            return false
+        else
+            renderer_mod._selected_paths[norm] = file_path
+            tree:render()
+            return true
+        end
+    end
+
+    function view.clear_selected()
+        renderer_mod._selected_paths = {}
+        tree:render()
+    end
+
+    --- 選択中ファイルのオリジナルパスリストを返す。
+    function view.get_selected_list()
+        local result = {}
+        for _, orig in pairs(renderer_mod._selected_paths) do
+            table.insert(result, orig)
+        end
+        return result
+    end
+
+    function view.selected_count()
+        local count = 0
+        for _ in pairs(renderer_mod._selected_paths) do count = count + 1 end
+        return count
+    end
+
+    --- マルチセレクト時のお気に入りトグル。
+    --- 選択済み → 削除、未登録 → フォルダpicker経由で追加。
+    --- on_done(removed_count, added_count, folder_name) が完了後に呼ばれる。
+    function view.toggle_favorites_multi(on_done)
+        local selected = view.get_selected_list()
+        if #selected == 0 then
+            if on_done then on_done(0, 0, nil) end
+            return
+        end
+
+        -- 登録済み / 未登録 に分類
+        local to_remove, to_add = {}, {}
+        for _, file_path in ipairs(selected) do
+            local is_fav = false
+            for _, item in ipairs(fav_data) do
+                if not item.is_folder and path.equal(item.path, file_path) then
+                    is_fav = true; break
+                end
+            end
+            if is_fav then
+                table.insert(to_remove, file_path)  -- keep original path for path.equal
+            else
+                table.insert(to_add, file_path)
+            end
+        end
+
+        -- 登録済みを一括削除
+        local removed_count = 0
+        if #to_remove > 0 then
+            local new_data = {}
+            for _, item in ipairs(fav_data) do
+                local skip = false
+                if not item.is_folder then
+                    for _, rp in ipairs(to_remove) do
+                        if path.equal(item.path, rp) then skip = true; break end
+                    end
+                end
+                if not skip then table.insert(new_data, item) end
+            end
+            removed_count = #fav_data - #new_data
+            fav_data = new_data
+            if removed_count > 0 then
+                store.save_ws(ws.safe_name, "favorites", fav_data)
+            end
+        end
+
+        local function finish(added_count, folder_name)
+            view.clear_selected()
+            rebuild_favorites()
+            tree:render()
+            if on_done then on_done(removed_count, added_count, folder_name) end
+        end
+
+        if #to_add == 0 then
+            finish(0, nil)
+            return
+        end
+
+        -- 未登録分をフォルダpicker経由で追加
+        local folder_paths = get_folder_paths()
+        local function do_add(folder_name)
+            for _, file_path in ipairs(to_add) do
+                table.insert(fav_data, {
+                    path     = file_path,
+                    name     = path.basename(file_path),
+                    folder   = folder_name,
+                    added_at = os.time(),
+                })
+            end
+            store.save_ws(ws.safe_name, "favorites", fav_data)
+            finish(#to_add, folder_name)
+        end
+
+        if #folder_paths == 0 then
+            do_add(nil)
+        else
+            local choices = { "(Root level)" }
+            for _, fp in ipairs(folder_paths) do table.insert(choices, fp.display) end
+            picker.select(choices, { prompt = "Add to favorites folder:", on_submit = function(choice)
+                if not choice then
+                    -- picker キャンセル: 削除だけ反映して終了
+                    finish(0, nil)
+                    return
+                end
+                if choice == "(Root level)" then
+                    do_add(nil)
+                else
+                    local parts = vim.split(choice, "/", { plain = true })
+                    do_add(parts[#parts])
+                end
+            end })
+        end
     end
 
     -- ── File system operations ────────────────────────────────────────────────
