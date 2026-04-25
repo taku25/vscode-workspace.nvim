@@ -103,11 +103,11 @@ require("vscode-workspace").setup({
 
     -- Icons (requires a Nerd Font)
     icon = {
-        expander_open   = "",
-        expander_closed = "",
-        folder_closed   = "",
-        folder_open     = "",
-        default_file    = "",
+        expander_open   = "",
+        expander_closed = "",
+        folder_closed   = "",
+        folder_open     = "",
+        default_file    = "",
         workspace       = "󰙅",
         uefn            = "⚡",
     },
