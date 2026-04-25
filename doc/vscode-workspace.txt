@@ -114,8 +114,6 @@ Navigation / opening~
   <CR> / o       Open file or expand/collapse directory
   s              Open in vertical split
   i              Open in horizontal split
-  <Tab>          (tab_next) reserved for future tab navigation
-  <S-Tab>        (tab_prev) reserved
   R              Refresh tree
   q              Close explorer
 
