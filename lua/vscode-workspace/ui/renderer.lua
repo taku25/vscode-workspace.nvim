@@ -3,8 +3,13 @@
 
 local Line = require("nui.line")
 local has_devicons, devicons = pcall(require, "nvim-web-devicons")
+local path = require("vscode-workspace.path")
 
 local M = {}
+
+-- Path of the currently active (non-explorer) buffer.
+-- Set by explorer.lua on BufEnter; used to highlight the active file in the tree.
+M._current_file = nil
 
 local function get_conf()
     return require("vscode-workspace.config").get()
@@ -73,8 +78,17 @@ function M.prepare_node(node)
     elseif extra_type == "fav_root" then
         icon_text = "★ "
         icon_hl   = "CWRootName"
+    elseif extra_type == "recent_root" then
+        icon_text = " "
+        icon_hl   = "CWRootName"
     elseif extra_type == "fav_folder" then
-        icon_text, icon_hl = dir_icon(node.text, node:is_expanded(), icons)
+        local custom_icon = node.extra and node.extra.icon
+        if custom_icon and custom_icon ~= "" then
+            icon_text = custom_icon .. " "
+            icon_hl   = "CWDirectoryIcon"
+        else
+            icon_text, icon_hl = dir_icon(node.text, node:is_expanded(), icons)
+        end
     elseif node.path then
         if has_devicons then
             local ext    = node.path:match("%.([^./\\]+)$") or ""
@@ -86,8 +100,18 @@ function M.prepare_node(node)
 
     line:append(icon_text, icon_hl)
 
-    -- Name
-    local name_hl = (extra_type == "root" or extra_type == "fav_root") and "CWRootName" or "CWFileName"
+    -- Name: use CWCurrentFile when this node is the active buffer
+    local is_current = M._current_file ~= nil
+        and node.path ~= nil
+        and path.equal(node.path, M._current_file)
+    local name_hl
+    if extra_type == "root" or extra_type == "fav_root" or extra_type == "recent_root" then
+        name_hl = "CWRootName"
+    elseif is_current then
+        name_hl = "CWCurrentFile"
+    else
+        name_hl = "CWFileName"
+    end
     line:append(node.text, name_hl)
 
     return line

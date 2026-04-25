@@ -47,6 +47,7 @@ Works with any `.code-workspace` project, including **UEFN (Unreal Editor for Fo
 | `:CW toggle` | Toggle the explorer panel |
 | `:CW focus` | Focus the explorer panel |
 | `:CW refresh` | Refresh the tree |
+| `:CW workspaces` | Show saved workspaces picker (cd + reload) |
 | `:CW files` | Find files across all workspace folders |
 | `:CW grep` | Live grep across all workspace folders |
 | `:CW favorite_current` | Toggle current buffer in Favorites |
@@ -66,6 +67,7 @@ Default keymaps inside the explorer buffer:
 | `f` | Find files (`:CW files`) |
 | `g` | Live grep (`:CW grep`) |
 | `R` | Refresh tree |
+| `W` | Switch workspace (recently used list) |
 | `q` | Close explorer |
 
 ### Favorites folder keymaps
@@ -76,6 +78,7 @@ Default keymaps inside the explorer buffer:
 | `<C-r>` | Rename favorites folder under cursor |
 | `<C-d>` | Remove favorites folder under cursor (files moved to Default) |
 | `m` | Move file under cursor to another favorites folder |
+| `<C-i>` | Set custom icon for favorites folder under cursor |
 
 ### File system keymaps
 
@@ -131,6 +134,15 @@ require("vscode-workspace").setup({
         dir_create        = "A",
         file_delete       = "d",
         file_rename       = "r",
+        -- Workspace switching
+        switch_workspace  = "W",
+        -- Favorite folder icon
+        fav_set_icon      = "<C-i>",
+    },
+
+    -- Max number of recently opened files shown in the Recent tree section.
+    recent_files = {
+        max = 20,
     },
 
     -- Picker backend: "telescope" | "fzf-lua" | "snacks" | "native"

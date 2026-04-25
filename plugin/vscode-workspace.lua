@@ -15,6 +15,10 @@ local subcommands = {
         desc    = "Live grep across all workspace folders",
         handler = function() require("vscode-workspace.api").grep() end,
     },
+    workspaces = {
+        desc    = "Show saved workspaces picker (cd + reload)",
+        handler = function() require("vscode-workspace.api").explorer_workspaces() end,
+    },
     favorite_current = {
         desc    = "Toggle current buffer in Favorites",
         handler = function() require("vscode-workspace.api").favorite_current() end,

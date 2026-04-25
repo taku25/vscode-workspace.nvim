@@ -8,6 +8,7 @@ function M.explorer_close()       require("vscode-workspace.ui.explorer").close(
 function M.explorer_toggle(opts)  require("vscode-workspace.ui.explorer").toggle(opts) end
 function M.explorer_focus()       require("vscode-workspace.ui.explorer").focus() end
 function M.explorer_refresh()     require("vscode-workspace.ui.explorer").refresh() end
+function M.explorer_workspaces()  require("vscode-workspace.ui.explorer").workspaces() end
 
 -- Pass the already-loaded workspace (if any) so commands don't have to re-discover it.
 local function current_ws()

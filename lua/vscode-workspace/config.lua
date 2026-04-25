@@ -25,6 +25,7 @@ local defaults = {
         CWDirectoryIcon  = { link = "Directory" },
         CWFileIcon       = { link = "Comment" },
         CWFileName       = { link = "Normal" },
+        CWCurrentFile    = { bold = true, underline = true },
         CWIndentMarker   = { link = "NonText" },
         CWRootName       = { link = "Title" },
         CWTabActive      = { link = "String" },
@@ -50,7 +51,17 @@ local defaults = {
         dir_create        = "A",
         file_delete       = "d",
         file_rename       = "r",
+        -- Workspace switching
+        switch_workspace  = "W",  -- shows saved workspaces picker (:CW workspaces)
+        -- Favorite folder icon
+        fav_set_icon      = "<C-i>",
     },
+    -- ── Recent files configuration ────────────────────────────────────────────
+    -- Max number of recently opened files to show in the Recent section of the tree.
+    recent_files = {
+        max = 20,
+    },
+
     -- ── Picker configuration ─────────────────────────────────────────────────
     -- picker: explicitly name the backend to use.
     --   "telescope" | "fzf-lua" | "snacks" | "native"

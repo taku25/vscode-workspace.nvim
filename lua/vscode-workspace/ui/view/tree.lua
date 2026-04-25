@@ -57,7 +57,7 @@ local function build_fav_nodes(fav_data)
 
     for _, item in ipairs(fav_data) do
         if item.is_folder and not folder_map[item.name] then
-            folder_map[item.name] = { parent = item.parent or nil, files = {} }
+            folder_map[item.name] = { parent = item.parent or nil, icon = item.icon or nil, files = {} }
             table.insert(folder_order, item.name)
         end
     end
@@ -104,7 +104,7 @@ local function build_fav_nodes(fav_data)
                     id            = "fav_folder:" .. fname,
                     type          = "fav_folder",
                     _has_children = has_ch,
-                    extra         = { cw_type = "fav_folder", folder_name = fname },
+                    extra         = { cw_type = "fav_folder", folder_name = fname, icon = folder_map[fname].icon },
                 }, has_ch and all_ch or nil))
             end
         end
@@ -132,7 +132,9 @@ function M.new(buf, ws)
     for _, d in ipairs(conf.ignore_dirs or {}) do ignore_dirs[d] = true end
     local is_excluded = filter.make_matcher(ws.exclude_map or {})
 
-    -- ── Initial node list: favorites root + workspace folder roots ────────────
+    local RECENT_MAX = (conf.recent_files and conf.recent_files.max) or 20
+
+    -- ── Initial node list: favorites root + recent root + workspace folder roots ────────────
 
     local fav_root_node = Tree.Node({
         text          = "Favorites",
@@ -140,6 +142,14 @@ function M.new(buf, ws)
         type          = "fav_root",
         _has_children = true,
         extra         = { cw_type = "fav_root" },
+    })
+
+    local recent_root_node = Tree.Node({
+        text          = "Recent",
+        id            = "__recent__",
+        type          = "recent_root",
+        _has_children = true,
+        extra         = { cw_type = "recent_root" },
     })
 
     -- .code-workspace file node (for quick access / editing)
@@ -151,7 +161,7 @@ function M.new(buf, ws)
         extra = { cw_type = "ws_file" },
     })
 
-    local all_roots = { fav_root_node, ws_file_node }
+    local all_roots = { fav_root_node, recent_root_node, ws_file_node }
     for _, folder in ipairs(ws.folders or {}) do
         if path.exists(folder.path) then
             table.insert(all_roots, Tree.Node({
@@ -231,6 +241,37 @@ function M.new(buf, ws)
         end
     end
 
+    -- ── Recent files data (mutable) ───────────────────────────────────────────
+
+    local recent_data = store.load_ws(ws.safe_name, "recent_files") or {}
+
+    --- Build nui.tree children for the Recent root.
+    local function build_recent_nodes()
+        local nodes = {}
+        for _, item in ipairs(recent_data) do
+            if path.exists(item.path) then
+                table.insert(nodes, Tree.Node({
+                    text  = path.basename(item.path),
+                    id    = "recent_item:" .. item.path,
+                    path  = item.path,
+                    type  = "file",
+                    extra = { cw_type = "recent_item" },
+                }))
+            end
+        end
+        return nodes
+    end
+
+    --- Rebuild the recent subtree in-place, preserving expansion state.
+    local function rebuild_recent()
+        local rr = tree:get_node("__recent__")
+        if not rr then return end
+        local was_open = rr:is_expanded()
+        tree:set_nodes(build_recent_nodes(), "__recent__")
+        local rr2 = tree:get_node("__recent__")
+        if rr2 and was_open then rr2:expand() end
+    end
+
     -- ── Populate favorites on first open ──────────────────────────────────────
 
     local top_nodes = build_fav_nodes(fav_data)
@@ -244,6 +285,11 @@ function M.new(buf, ws)
     local fr = tree:get_node("__favorites__")
     if fr then fr:expand() end
 
+    -- ── Populate recent files on first open ───────────────────────────────────
+
+    tree:set_nodes(build_recent_nodes(), "__recent__")
+    -- Recent root starts collapsed to avoid clutter
+
     -- ── View object ───────────────────────────────────────────────────────────
 
     local view = { tree = tree, ws = ws, buf = buf }
@@ -252,7 +298,7 @@ function M.new(buf, ws)
     --- fav_root / fav_folder: children already loaded, nothing to do.
     --- directory: lazy filesystem scan. Recursively restores saved expansion state.
     function view.expand_node(node)
-        if node.type == "fav_root" or node.type == "fav_folder" then return end
+        if node.type == "fav_root" or node.type == "fav_folder" or node.type == "recent_root" then return end
         if not node._has_children then return end
         if node:has_children() then return end  -- already scanned
 
@@ -361,6 +407,66 @@ function M.new(buf, ws)
             if not item.is_folder then table.insert(result, item.path) end
         end
         return result
+    end
+
+    --- Add a file to recent files if it belongs to this workspace.
+    --- Also re-renders the tree (for current-file highlight).
+    ---@param file_path string
+    function view.add_recent(file_path)
+        if not vim.api.nvim_buf_is_valid(buf) then return end
+        local norm = path.normalize(file_path)
+        -- Check if file is under any workspace folder
+        local in_ws = false
+        for _, folder in ipairs(ws.folders or {}) do
+            local fp = folder.path  -- already normalized (no trailing slash)
+            if path.equal(norm:sub(1, #fp), fp) then
+                local next_char = norm:sub(#fp + 1, #fp + 1)
+                if next_char == "/" or next_char == "" then
+                    in_ws = true; break
+                end
+            end
+        end
+
+        if in_ws then
+            -- Remove existing entry to move it to front
+            for i, item in ipairs(recent_data) do
+                if path.equal(item.path, file_path) then
+                    table.remove(recent_data, i); break
+                end
+            end
+            table.insert(recent_data, 1, { path = file_path, time = os.time() })
+            -- Trim to configured max
+            while #recent_data > RECENT_MAX do table.remove(recent_data) end
+            store.save_ws(ws.safe_name, "recent_files", recent_data)
+            rebuild_recent()
+        end
+
+        -- Always re-render so current-file highlight updates
+        tree:render()
+    end
+
+    --- Set a custom icon for a favorite folder.
+    ---@param node table  nui.tree node (must be fav_folder type)
+    function view.set_fav_folder_icon(node)
+        if not node or node.type ~= "fav_folder" then
+            vim.notify("[CW] Cursor is not on a favorites folder", vim.log.levels.WARN)
+            return
+        end
+        local fname = node.extra and node.extra.folder_name
+        local current_icon = node.extra and node.extra.icon or ""
+        vim.ui.input({ prompt = "Icon for '" .. fname .. "' (empty to reset): ",
+                       default = current_icon }, function(icon_str)
+            if icon_str == nil then return end  -- cancelled
+            for _, item in ipairs(fav_data) do
+                if item.is_folder and item.name == fname then
+                    item.icon = (icon_str ~= "") and icon_str or nil
+                    break
+                end
+            end
+            store.save_ws(ws.safe_name, "favorites", fav_data)
+            rebuild_favorites()
+            tree:render()
+        end)
     end
 
     --- Refresh: recursively rescan all currently-expanded real directories.
