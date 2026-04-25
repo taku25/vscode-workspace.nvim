@@ -19,10 +19,10 @@ local defaults = {
         folder_open     = "",
         default_file    = "",
         workspace       = "󰙅",
-        uefn            = "⚡",
+        uefn            = "",
         favorites       = "★",
         recent          = "",
-        select_marker   = "",
+        select_marker   = "〇",
     },
     highlights = {
         CWDirectoryIcon  = { link = "Directory" },
